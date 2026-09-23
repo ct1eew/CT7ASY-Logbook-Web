@@ -15,3 +15,5 @@ input::-webkit-date-and-time-value{text-align:left;min-height:1.2em}
  input[name=call]{font-size:20px}textarea{height:64px;min-height:64px}.actions{margin-top:14px}.actions button{padding:10px 12px;min-height:44px}
  footer{padding:16px 24px;font-size:11px}.card{padding:14px}.data-grid article{padding:16px}
 }
+
+#contactMap{height:clamp(280px,52vh,540px);border-radius:12px;background:#18394b;z-index:0}#mapResults{display:flex;gap:8px;overflow:auto;max-height:160px;flex-wrap:wrap;margin:12px 0}#mapResults button{font-size:13px;padding:8px 12px}.leaflet-popup-content{color:#122b3d}.leaflet-control a{color:#123047}#map .section-title{margin-bottom:12px}#mapNetwork{font-size:13px}#map a{color:#38bdf8}
