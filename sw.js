@@ -1,4 +1,4 @@
-const CACHE='ct7asy-web-0.1.2';
+const CACHE='ct7asy-web-0.1.2-layout';
 const FILES=['./','./index.html','./style.css','./app.js','./adif.js','./map.js','./leaflet.js','./leaflet.css','./LEAFLET-LICENSE.txt','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES))));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('ct7asy-web-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
