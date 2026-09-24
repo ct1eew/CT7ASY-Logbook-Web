@@ -89,3 +89,21 @@ nav{flex-wrap:wrap}nav button{flex:1 0 90px}.prop-layout{display:grid;grid-templ
 .history-summary{display:flex;flex:1 1 auto;align-items:center;flex-wrap:wrap;gap:5px 14px}
 .history-summary>span{font-size:var(--ui-font);color:var(--muted);overflow-wrap:anywhere}
 #history .card .actions{width:auto;flex:0 0 auto;margin-left:auto}
+
+/* Compact page content: navigation already identifies each page. */
+#log>.section-title{display:none}
+#contactForm>.fields,#dx>.fields{margin-top:0}
+#profileList:empty{display:none}
+#profileList{margin-top:0;margin-bottom:12px}
+#profileFormTitle{margin:0 0 8px}
+#history,#map{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:end}
+#history>.section-title,#map>.section-title{grid-column:2;grid-row:1;justify-content:flex-end}
+#history>label,#map>label{grid-column:1;grid-row:1}
+#history>#contactList,#map>:not(.section-title):not(label){grid-column:1/-1}
+#history>#contactList{margin:4px 0 0}
+
+.contact-call{display:grid;gap:clamp(3px,.5vw,6px);align-content:end;min-width:0}
+.page #autoQRZ{justify-self:start;min-height:0;padding:2px 8px;font-size:var(--ui-label);line-height:1.2}
+#autoQRZ[aria-pressed=true]{color:#001826;background:var(--accent)}
+#qrzLogin{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
+#qrzLogin .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
