@@ -1,5 +1,5 @@
 import {setupOnline,enterOnline} from './online.js';
-const APP_VERSION='0.1.14';
+const APP_VERSION='0.1.15';
 import {showMap,locatorPosition} from './map.js';
 import {bands,modes,bandFor,validate,exportADIF,parseADIF,fingerprint} from './adif.js';
 const $=id=>document.getElementById(id), form=$('contactForm'), profileForm=$('profileForm');
@@ -37,7 +37,7 @@ function renderProfileHint(){const p=active();$('activeProfile').textContent=p?p
 function navigate(id){document.querySelectorAll('.page').forEach(el=>el.hidden=el.id!==id);document.querySelectorAll('nav button').forEach(b=>{if(b.dataset.page===id)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});window.scrollTo(0,0);if(id==='map')requestAnimationFrame(()=>showMap(state,active()));if(['dx','propagation'].includes(id))enterOnline(id);}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>navigate(b.dataset.page));
 function render(){renderProfileHint();renderHistory();renderProfiles();renderExport();if(!$('map').hidden)showMap(state,active());}
-function renderHistory(){const q=$('search').value.trim().toLowerCase();const list=state.contacts.filter(c=>[c.call,c.name,c.qth,c.country].some(v=>(v||'').toLowerCase().includes(q))).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));$('contactCount').textContent=state.contacts.length+(state.contacts.length===1?' contacto':' contactos');$('contactList').innerHTML=list.map(c=>`<article class="card"><div><strong>${esc(c.call)}</strong><p>${esc(c.date.split('-').reverse().join('-'))} · ${esc(c.time)} UTC · ${esc(c.band)} · ${esc(c.mode)}<br>${esc(c.name||c.qth||'')} · Estação: ${esc(c.station||'—')}</p></div><div class="actions"><button data-edit="${c.id}">Editar</button><button data-delete="${c.id}">Apagar</button></div></article>`).join('')||'<p class="muted">Ainda não há contactos para apresentar.</p>';}
+function renderHistory(){const q=$('search').value.trim().toLowerCase();const list=state.contacts.filter(c=>[c.call,c.name,c.qth,c.country].some(v=>(v||'').toLowerCase().includes(q))).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));$('contactCount').textContent=state.contacts.length+(state.contacts.length===1?' contacto':' contactos');$('contactList').innerHTML=list.map(c=>`<article class="card"><div class="history-summary"><strong>${esc(c.call)}</strong><span>${esc(c.date.split('-').reverse().join('-'))}</span><span>${esc(c.time)} UTC</span><span>${esc(c.band)} · ${esc(c.mode)}</span>${c.name||c.qth?`<span>${esc(c.name||c.qth)}</span>`:''}<span>Estação: ${esc(c.station||'—')}</span></div><div class="actions"><button data-edit="${c.id}">Editar</button><button data-delete="${c.id}">Apagar</button></div></article>`).join('')||'<p class="muted">Ainda não há contactos para apresentar.</p>';}
 $('search').oninput=renderHistory;
 form.elements.call.oninput=e=>e.target.value=e.target.value.toUpperCase();
 form.elements.freq.oninput=()=>{form.elements.band.value=bandFor(form.elements.freq.value.trim().replace(',','.'));};

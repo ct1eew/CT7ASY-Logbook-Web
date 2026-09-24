@@ -84,3 +84,8 @@ nav{flex-wrap:wrap}nav button{flex:1 0 90px}.prop-layout{display:grid;grid-templ
  .contact-timing>label{grid-column:span 2}
  .contact-timing>label:nth-child(-n+2){grid-column:span 3}
 }
+
+#history .card{flex-direction:row;flex-wrap:wrap;align-items:center}
+.history-summary{display:flex;flex:1 1 auto;align-items:center;flex-wrap:wrap;gap:5px 14px}
+.history-summary>span{font-size:var(--ui-font);color:var(--muted);overflow-wrap:anywhere}
+#history .card .actions{width:auto;flex:0 0 auto;margin-left:auto}
