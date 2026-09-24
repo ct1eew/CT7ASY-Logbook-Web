@@ -2,6 +2,7 @@ import {spotLocation} from './dx-location.js';
 import {locatorPosition} from './map.js';
 import {bandFor} from './adif.js';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+let autoTimer,calculating=false,calculationQueued=false;
 let base='',token='',timer,spots=[],selected=null,epoch=0,table=null,hooks;
 export function setupOnline(callbacks){
  hooks=callbacks;
@@ -22,9 +23,15 @@ export function setupOnline(callbacks){
   else $('propStatus').textContent=location.grid?'Preencha o locator TX no perfil da estação ou neste campo.':'Introduza o locator RX para calcular.';
  };
  $('propForm').onsubmit=e=>{e.preventDefault();calculate();};
- $('propForm').oninput=e=>{if(e.target.id==='propRX')$('propSource').textContent='Locator introduzido manualmente.';epoch++;table=null;drawWheel();$('propStatus').textContent='Parâmetros alterados. Toque em Calcular.';};
+ const changed=e=>{
+  if(e.target.id==='propRX')$('propSource').textContent='Locator introduzido manualmente.';
+  epoch++;table=null;drawWheel();clearTimeout(autoTimer);calculationQueued=false;
+  if(!validPrediction()){$('propStatus').textContent='Preencha locators válidos e uma potência entre 1 e 1500 W.';return;}
+  $('propStatus').textContent='A atualizar…';autoTimer=setTimeout(calculate,500);
+ };
+ $('propForm').oninput=changed;$('propForm').onchange=changed;
  $('propTX').value=hooks.profile()?.locator||'';drawWheel();
- addEventListener('offline',()=>{epoch++;clearTimeout(timer);$('dxStatus').textContent='Sem Internet. A ligação será retomada quando regressar à aplicação com rede.';$('propStatus').textContent='Sem Internet. A previsão requer ligação.';});
+ addEventListener('offline',()=>{epoch++;clearTimeout(autoTimer);calculationQueued=false;clearTimeout(timer);$('dxStatus').textContent='Sem Internet. A ligação será retomada quando regressar à aplicação com rede.';$('propStatus').textContent='Sem Internet. A previsão requer ligação.';});
  addEventListener('online',()=>{if(token)poll();});
  document.addEventListener('visibilitychange',()=>{clearTimeout(timer);if(!document.hidden&&token&&navigator.onLine)poll();});
  fetch('./online-config.json',{cache:'no-store'}).then(r=>r.json()).then(c=>{if(c.serviceUrl){const u=new URL(c.serviceUrl);if(u.protocol!=='https:'&&u.hostname!=='127.0.0.1')throw Error('Endereço do serviço inválido.');base=u.href.replace(/\/$/,'');$('serviceStatus').textContent='Serviço online configurado. O primeiro pedido pode demorar cerca de um minuto.';loadServers();}else $('serviceStatus').textContent='A aguardar ativação do serviço online.';}).catch(()=>$('serviceStatus').textContent='Não foi possível verificar o serviço online.');
@@ -42,7 +49,23 @@ let polling=false;
 async function poll(){if(polling||!token||document.hidden||!navigator.onLine)return;polling=true;const current=token;try{const r=await api('/dx/status');if(token!==current)return;spots=r.spots;$('dxStatus').textContent=r.status+' · '+new Date().toLocaleTimeString('pt-PT');renderSpots();}catch(e){if(token!==current)return;$('dxStatus').textContent=e.message;if(e.status===410){await disconnect();$('dxStatus').textContent='A ligação expirou. Toque em Ligar para retomar.';}}finally{polling=false;if(token&&navigator.onLine&&!document.hidden)timer=setTimeout(poll,5000);}}
 function spotMode(s){const m=String(s.comment||'').toUpperCase().match(/\b(FT8|FT4|CW|USB|LSB|SSB|FM|AM|RTTY|PSK31|JS8|Q65|DSTAR|DMR|C4FM)\b/);return m?m[1]:'';}
 function renderSpots(){const list=spots.filter(s=>(!$('dxBand').value||bandFor(s.freq)===$('dxBand').value)&&(!$('dxMode').value||spotMode(s)===$('dxMode').value));if(!list.some(s=>s.id===selected?.id))selected=null;$('dxRows').innerHTML=list.map(s=>`<button type="button" data-spot="${s.id}" class="spot ${s.id===selected?.id?'spot-selected':''}" aria-pressed="${s.id===selected?.id}"><strong>${esc(s.call)}</strong><span>${Number(s.freq).toFixed(3)} MHz · ${esc(bandFor(s.freq))} · ${esc(spotMode(s)||'Modo não identificado')}</span><small>${esc(s.time)} UTC · ${esc(s.comment)} · ${esc(s.spotter)}</small></button>`).join('')||'<p class="muted">Sem spots para os filtros selecionados.</p>';$('dxToLog').disabled=$('dxToPropagation').disabled=!selected;}
-async function calculate(){const data=Object.fromEntries(new FormData($('propForm')));if(!locatorPosition(data.tx)||!locatorPosition(data.rx)){$('propStatus').textContent='Preencha locators TX e RX válidos.';return;}const current=++epoch;table=null;drawWheel();$('propCalculate').disabled=true;$('propStatus').textContent='A calcular…';try{const r=await api('/propagation',{...data,power:Number(data.power),rxantenna:data.txantenna});if(epoch!==current)return;table=r.table;drawWheel();$('propStatus').textContent='Previsão: '+r.date.split('-').reverse().join('-')+' · Horas locais';}catch(e){if(epoch===current)$('propStatus').textContent=e.message;}finally{$('propCalculate').disabled=false;}}
+function validPrediction(){return $('propForm').checkValidity()&&locatorPosition($('propTX').value)&&locatorPosition($('propRX').value);}
+async function calculate(){
+ clearTimeout(autoTimer);
+ if(!validPrediction()){$('propStatus').textContent='Preencha locators válidos e uma potência entre 1 e 1500 W.';return;}
+ // Complete the current request before sending the latest inputs to the server.
+ if(calculating){calculationQueued=true;return;}
+ calculationQueued=false;calculating=true;
+ const data=Object.fromEntries(new FormData($('propForm'))),current=++epoch;
+ data.tx=data.tx.trim().toUpperCase();data.rx=data.rx.trim().toUpperCase();
+ table=null;drawWheel();$('propCalculate').disabled=true;$('propStatus').textContent='A calcular…';
+ try{
+  const r=await api('/propagation',{...data,power:Number(data.power),rxantenna:data.txantenna});
+  if(epoch!==current)return;
+  table=r.table;drawWheel();$('propStatus').textContent='Previsão: '+r.date.split('-').reverse().join('-')+' · Horas locais';
+ }catch(e){if(epoch===current)$('propStatus').textContent=e.message;}
+ finally{calculating=false;$('propCalculate').disabled=false;if(calculationQueued){calculationQueued=false;calculate();}}
+}
 function localHour(hour){const day=new Date();day.setUTCHours(hour,0,0,0);return day.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit',hour12:false});}
 function drawWheel(){
  const bands=[['3','80m'],['5','60m'],['7','40m'],['10','30m'],['14','20m'],['18','17m'],['21','15m'],['24','12m'],['28','10m']];const hour=new Date().getUTCHours(),band=bandFor($('propFrequency').value);let svg='<svg viewBox="0 0 500 500" role="group" aria-label="Previsão por banda e hora local">';
