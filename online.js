@@ -1,3 +1,4 @@
+import {spotLocation} from './dx-location.js';
 import {locatorPosition} from './map.js';
 import {bandFor} from './adif.js';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
@@ -8,9 +9,20 @@ export function setupOnline(callbacks){
  $('dxBand').onchange=renderSpots;$('dxMode').onchange=renderSpots;
  $('dxRows').onclick=e=>{const b=e.target.closest('[data-spot]');if(b){selected=spots.find(s=>s.id===Number(b.dataset.spot));renderSpots();}};
  $('dxToLog').onclick=()=>{const s=spots.find(s=>s.id===selected?.id);if(s)hooks.toLog({...s,mode:spotMode(s)});};
- $('dxToPropagation').onclick=()=>{if(!selected)return;$('propFrequency').value=selected.freq;$('propTarget').textContent=selected.call;$('propRX').value=hooks.contacts().find(c=>c.call===selected.call&&locatorPosition(c.locator))?.locator||'';const m=spotMode(selected);$('propMode').value=({CW:'19',FT8:'13',FT4:'17',AM:'49'})[m]||'38';hooks.navigate('propagation');};
+ $('dxToPropagation').onclick=()=>{
+  if(!selected)return;
+  epoch++;table=null;
+  const location=spotLocation(selected,hooks.contacts());
+  $('propFrequency').value=selected.freq;$('propTarget').textContent='· DX Cluster · '+selected.call;
+  $('propTX').value=hooks.profile()?.locator||'';$('propRX').value=location.grid;
+  $('propSource').textContent=location.source;
+  const m=spotMode(selected);$('propMode').value=({CW:'19',FT8:'13',FT4:'17',AM:'49'})[m]||'38';
+  hooks.navigate('propagation');drawWheel();
+  if(locatorPosition($('propTX').value)&&location.grid)calculate();
+  else $('propStatus').textContent=location.grid?'Preencha o locator TX no perfil da estação ou neste campo.':'Introduza o locator RX para calcular.';
+ };
  $('propForm').onsubmit=e=>{e.preventDefault();calculate();};
- $('propForm').oninput=()=>{epoch++;table=null;drawWheel();$('propStatus').textContent='Parâmetros alterados. Toque em Calcular.';};
+ $('propForm').oninput=e=>{if(e.target.id==='propRX')$('propSource').textContent='Locator introduzido manualmente.';epoch++;table=null;drawWheel();$('propStatus').textContent='Parâmetros alterados. Toque em Calcular.';};
  $('propTX').value=hooks.profile()?.locator||'';drawWheel();
  addEventListener('offline',()=>{epoch++;clearTimeout(timer);$('dxStatus').textContent='Sem Internet. A ligação será retomada quando regressar à aplicação com rede.';$('propStatus').textContent='Sem Internet. A previsão requer ligação.';});
  addEventListener('online',()=>{if(token)poll();});
