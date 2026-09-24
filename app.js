@@ -1,5 +1,5 @@
 import {setupOnline,enterOnline} from './online.js';
-const APP_VERSION='0.1.12';
+const APP_VERSION='0.1.13';
 import {showMap,locatorPosition} from './map.js';
 import {bands,modes,bandFor,validate,exportADIF,parseADIF,fingerprint} from './adif.js';
 const $=id=>document.getElementById(id), form=$('contactForm'), profileForm=$('profileForm');
@@ -42,6 +42,15 @@ $('search').oninput=renderHistory;
 form.elements.call.oninput=e=>e.target.value=e.target.value.toUpperCase();
 form.elements.freq.oninput=()=>{form.elements.band.value=bandFor(form.elements.freq.value.trim().replace(',','.'));};
 form.elements.freq.onchange=()=>{form.elements.freq.value=form.elements.freq.value.trim().replace(',','.');form.elements.freq.oninput();};
+form.addEventListener('keydown',e=>{
+ if(e.key!=='Enter'||e.isComposing||e.keyCode===229)return;
+ if(!e.target.matches('input,select,textarea'))return;
+ if(e.target.tagName==='TEXTAREA'&&e.shiftKey)return;
+ e.preventDefault();
+ const fields=[...form.querySelectorAll('input,select,textarea')].filter(el=>!el.disabled&&!el.readOnly&&el.type!=='hidden');
+ const index=fields.indexOf(e.target);
+ (fields[(index+1)%fields.length])?.focus();
+});
 form.onsubmit=e=>{e.preventDefault();safe(async()=>{const p=active(),old=state.contacts.find(c=>c.id===editing);if(!old&&!p){navigate('profiles');throw Error('Cria primeiro o perfil da tua estação.');}const c=Object.fromEntries(new FormData(form));c.call=c.call.trim().toUpperCase();c.locator=old?.locator||'';const instant=contactInstant();if(!instant)throw Error('Data ou hora local inválida.');const utc=instant.toISOString();c.date=utc.slice(0,10);c.time=utc.slice(11,19);c.freq=c.freq.trim().replace(',','.');c.band=c.freq?bandFor(c.freq):c.band;Object.assign(c,{id:old?.id||crypto.randomUUID(),station:old?old.station:p.station,station_locator:old?old.station_locator:p.locator,kind:old?old.kind:kind(p),profileId:old?old.profileId:p.id});validate(c);await mutate(s=>{if(old){const i=s.contacts.findIndex(x=>x.id===c.id);if(i<0)throw Error('Este contacto foi removido noutra janela.');s.contacts[i]=c;}else s.contacts.push(c);});reset();notice('Contacto guardado neste dispositivo.');form.elements.call.focus();});};
 $('clearContact').onclick=()=>{reset();form.elements.call.focus();};
 $('contactList').onclick=e=>safe(async()=>{const edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');if(edit){const c=state.contacts.find(c=>c.id===edit.dataset.edit);form.reset();editing=c.id;for(const k of ['mode'])if(![...form.elements[k].options].some(o=>o.value===c[k]))form.elements[k].add(new Option(c[k],c[k]));for(const [k,v]of Object.entries(c))if(form.elements[k])form.elements[k].value=k==='time'?v.slice(0,5):v;manualTime=true;setLocalTime(new Date(c.date+'T'+c.time+'Z'));if(c.freq)form.elements.band.value=bandFor(c.freq);$('formTitle').textContent='Editar contacto';$('saveContact').textContent='Guardar alterações';renderProfileHint();navigate('log');}if(del&&confirm('Apagar este contacto? Esta ação não pode ser anulada.'))await mutate(s=>{s.contacts=s.contacts.filter(c=>c.id!==del.dataset.delete);});});
