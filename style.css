@@ -69,3 +69,18 @@ body{font-size:var(--ui-font)}
 @media(max-width:599px){header{padding-top:12px;padding-bottom:10px}.header-status{margin-top:8px;font-size:11px}.page{padding:14px 12px}.fields{margin-top:12px}.actions{margin-top:12px}.page textarea{min-height:50px;height:60px}}
 
 nav{flex-wrap:wrap}nav button{flex:1 0 90px}.prop-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:center}#propForm .fields{grid-template-columns:repeat(2,minmax(0,1fr))}#propWheel svg{width:100%;max-height:480px;display:block}#propCalculate{margin-top:14px}#propStatus{min-height:3em}#dxRows{max-height:55dvh;overflow:auto;display:grid;gap:6px}.spot{display:grid;grid-template-columns:110px 1fr;text-align:left;gap:5px}.spot small{grid-column:1/-1;overflow-wrap:anywhere}.spot-selected{border-color:#38bdf8;background:#164b67}#dx .actions{flex-wrap:wrap}#dx .actions button{min-width:100px}.page a{color:#38bdf8}@media(max-width:700px){.prop-layout{grid-template-columns:minmax(0,1fr)}nav button{flex-basis:22%;font-size:12px;padding:6px}#propWheel svg{max-height:350px}}
+
+/* Contact rows: matching identity widths and compact reports beside the clocks. */
+#contactForm>.fields{grid-template-columns:repeat(12,minmax(0,1fr))}
+#contactForm .contact-call,#contactForm .contact-frequency,#contactForm .contact-name,#contactForm .contact-qth,#contactForm .contact-country{grid-column:span 4}
+#contactForm .contact-band,#contactForm .contact-mode{grid-column:span 2}
+.contact-timing{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr) minmax(0,1.5fr) minmax(0,1.5fr);gap:var(--ui-space) clamp(8px,1.4vw,16px)}
+.contact-timing>label{min-width:0}
+@media(max-width:599px){
+ #contactForm .contact-call,#contactForm .contact-name{grid-column:1/-1}
+ #contactForm .contact-frequency,#contactForm .contact-qth,#contactForm .contact-country{grid-column:span 6}
+ #contactForm .contact-band,#contactForm .contact-mode{grid-column:span 3}
+ .contact-timing{grid-template-columns:repeat(6,minmax(0,1fr))}
+ .contact-timing>label{grid-column:span 2}
+ .contact-timing>label:nth-child(-n+2){grid-column:span 3}
+}

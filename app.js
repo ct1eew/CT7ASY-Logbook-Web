@@ -1,5 +1,5 @@
 import {setupOnline,enterOnline} from './online.js';
-const APP_VERSION='0.1.13';
+const APP_VERSION='0.1.14';
 import {showMap,locatorPosition} from './map.js';
 import {bands,modes,bandFor,validate,exportADIF,parseADIF,fingerprint} from './adif.js';
 const $=id=>document.getElementById(id), form=$('contactForm'), profileForm=$('profileForm');
