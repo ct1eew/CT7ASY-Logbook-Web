@@ -3,6 +3,7 @@ import {locatorPosition} from './map.js';
 import {bandFor} from './adif.js';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
 let autoTimer,calculating=false,calculationQueued=false;
+let connectionRevision=0;
 let base='',token='',timer,spots=[],selected=null,epoch=0,table=null,hooks;
 export function setupOnline(callbacks){
  hooks=callbacks;
@@ -33,7 +34,8 @@ export function setupOnline(callbacks){
  $('propTX').value=hooks.profile()?.locator||'';drawWheel();
  addEventListener('offline',()=>{epoch++;clearTimeout(autoTimer);calculationQueued=false;clearTimeout(timer);$('dxStatus').textContent='Sem Internet. A ligação será retomada quando regressar à aplicação com rede.';$('propStatus').textContent='Sem Internet. A previsão requer ligação.';});
  addEventListener('online',()=>{if(token)poll();});
- document.addEventListener('visibilitychange',()=>{clearTimeout(timer);if(!document.hidden&&token&&navigator.onLine)poll();});
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)closeCluster();});
+ addEventListener('pagehide',closeCluster);
  fetch('./online-config.json',{cache:'no-store'}).then(r=>r.json()).then(c=>{if(c.serviceUrl){const u=new URL(c.serviceUrl);if(u.protocol!=='https:'&&u.hostname!=='127.0.0.1')throw Error('Endereço do serviço inválido.');base=u.href.replace(/\/$/,'');$('serviceStatus').textContent='Serviço online configurado. O primeiro pedido pode demorar cerca de um minuto.';loadServers();}else $('serviceStatus').textContent='A aguardar ativação do serviço online.';}).catch(()=>$('serviceStatus').textContent='Não foi possível verificar o serviço online.');
 }
 export function enterOnline(page){if(page==='propagation'&&!$('propTX').value)$('propTX').value=hooks.profile()?.locator||'';if(page==='dx'&&!$('dxCall').value)$('dxCall').value=hooks.profile()?.station||'';}
@@ -43,8 +45,31 @@ async function api(path,data,auth=token){
  try{const r=await fetch(base+path,{method:data===undefined?'GET':'POST',headers:{...(data===undefined?{}:{'Content-Type':'application/json'}),...(auth?{Authorization:'Bearer '+auth}:{})},body:data===undefined?undefined:JSON.stringify(data),signal:controller.signal,cache:'no-store'});const result=await r.json();if(!r.ok){const e=Error(result.error||'Serviço indisponível.');e.status=r.status;throw e;}return result;}catch(e){if(e.name==='AbortError')throw Error('O serviço não respondeu a tempo. Tente novamente.');throw e;}finally{clearTimeout(timeout);}
 }
 async function loadServers(){try{const r=await api('/servers');$('dxServer').innerHTML=r.servers.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');}catch(e){$('dxStatus').textContent=e.message;}}
-async function connect(){if(token)return;$('dxConnect').disabled=true;$('dxStatus').textContent='A ligar…';try{const r=await api('/dx/connect',{server:$('dxServer').value,call:$('dxCall').value.trim().toUpperCase()});token=r.token;$('dxDisconnect').disabled=false;$('dxServer').disabled=true;$('dxCall').disabled=true;await poll();}catch(e){$('dxStatus').textContent=e.message;}finally{if(!token)$('dxConnect').disabled=false;}}
-async function disconnect(){const previous=token;token='';clearTimeout(timer);spots=[];selected=null;renderSpots();$('dxStatus').textContent='Desligado';$('dxConnect').disabled=false;$('dxDisconnect').disabled=true;$('dxServer').disabled=false;$('dxCall').disabled=false;if(previous)try{await api('/dx/disconnect',{},previous);}catch{/* Server expires abandoned sessions automatically. */}}
+function releaseCluster(sessionToken){
+ if(!sessionToken||!base)return;
+ // A simple text request avoids an authentication preflight during page shutdown.
+ try{if(navigator.sendBeacon?.(base+'/dx/disconnect',sessionToken))return;}catch{}
+ fetch(base+'/dx/disconnect',{method:'POST',body:sessionToken,keepalive:true,credentials:'omit'}).catch(()=>{});
+}
+function resetCluster(){
+ connectionRevision++;const previous=token;token='';clearTimeout(timer);spots=[];selected=null;
+ renderSpots();$('dxStatus').textContent='Desligado';$('dxConnect').disabled=false;$('dxDisconnect').disabled=true;$('dxServer').disabled=false;$('dxCall').disabled=false;
+ return previous;
+}
+function closeCluster(){releaseCluster(resetCluster());}
+async function connect(){
+ if(token||document.hidden)return;
+ const revision=++connectionRevision;
+ $('dxConnect').disabled=true;$('dxStatus').textContent='A ligar…';
+ try{
+  const r=await api('/dx/connect',{server:$('dxServer').value,call:$('dxCall').value.trim().toUpperCase()});
+  if(revision!==connectionRevision||document.hidden){releaseCluster(r.token);return;}
+  token=r.token;$('dxDisconnect').disabled=false;$('dxServer').disabled=true;$('dxCall').disabled=true;await poll();
+ }catch(e){if(revision===connectionRevision)$('dxStatus').textContent=e.message;}
+ finally{if(revision===connectionRevision&&!token)$('dxConnect').disabled=false;}
+}
+async function disconnect(){const previous=resetCluster();if(previous)try{await api('/dx/disconnect',{},previous);}catch{releaseCluster(previous);}}
+
 let polling=false;
 async function poll(){if(polling||!token||document.hidden||!navigator.onLine)return;polling=true;const current=token;try{const r=await api('/dx/status');if(token!==current)return;spots=r.spots;$('dxStatus').textContent=r.status+' · '+new Date().toLocaleTimeString('pt-PT');renderSpots();}catch(e){if(token!==current)return;$('dxStatus').textContent=e.message;if(e.status===410){await disconnect();$('dxStatus').textContent='A ligação expirou. Toque em Ligar para retomar.';}}finally{polling=false;if(token&&navigator.onLine&&!document.hidden)timer=setTimeout(poll,5000);}}
 function spotMode(s){const m=String(s.comment||'').toUpperCase().match(/\b(FT8|FT4|CW|USB|LSB|SSB|FM|AM|RTTY|PSK31|JS8|Q65|DSTAR|DMR|C4FM)\b/);return m?m[1]:'';}
