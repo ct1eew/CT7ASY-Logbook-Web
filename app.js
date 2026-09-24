@@ -1,5 +1,5 @@
 import {setupOnline,enterOnline} from './online.js';
-const APP_VERSION='0.1.10';
+const APP_VERSION='0.1.11';
 import {showMap,locatorPosition} from './map.js';
 import {bands,modes,bandFor,validate,exportADIF,parseADIF,fingerprint} from './adif.js';
 const $=id=>document.getElementById(id), form=$('contactForm'), profileForm=$('profileForm');
@@ -16,8 +16,23 @@ if(channel)channel.onmessage=()=>safe(async()=>{state=await readState();render()
 const active=()=>state.profiles.find(p=>p.id===state.active);
 const kind=p=>/^(CT[0Ø]|SWL)/i.test(p?.station||'')?'SWL':'QSO';
 function options(el,values){el.innerHTML=values.map(v=>`<option value="${esc(v)}">${esc(v||'Selecionar')}</option>`).join('');}
-options(form.elements.band,['',...bands]);options(form.elements.mode,modes);
-function reset(){editing=null;form.reset();const now=new Date().toISOString();form.elements.date.value=now.slice(0,10);form.elements.time.value=now.slice(11,16);$('formTitle').textContent='Registo de contacto';$('saveContact').textContent='Guardar contacto';renderProfileHint();}
+options(form.elements.mode,modes);
+let manualTime=false;
+const pad=n=>String(n).padStart(2,'0');
+function localFields(date){return {date:date.getFullYear()+'-'+pad(date.getMonth()+1)+'-'+pad(date.getDate()),time:pad(date.getHours())+':'+pad(date.getMinutes())};}
+function setLocalTime(date){const parts=localFields(date);form.elements.date.value=parts.date;form.elements.time.value=parts.time;syncUTC();}
+function contactInstant(){
+ const date=form.elements.date.value,time=form.elements.time.value,old=state.contacts.find(c=>c.id===editing);
+ // Preserve the exact instant (and seconds) when editing, including repeated DST hours.
+ if(old){const instant=new Date(old.date+'T'+old.time+'Z'),local=localFields(instant);if(date===local.date&&time===local.time)return instant;}
+ const instant=new Date(date+'T'+time+':00');
+ if(!date||!time||!Number.isFinite(instant.getTime()))return null;
+ const local=localFields(instant);return local.date===date&&local.time===time?instant:null;
+}
+function syncUTC(){const instant=contactInstant();$('contactUTC').value=instant?instant.toISOString().slice(11,16):'';$('contactUTC').title=instant?'Data UTC: '+instant.toISOString().slice(0,10):'';}
+for(const field of ['date','time'])form.elements[field].oninput=()=>{manualTime=true;syncUTC();};
+setInterval(()=>{if(!editing&&!manualTime)setLocalTime(new Date());},1000);
+function reset(){editing=null;manualTime=false;form.reset();setLocalTime(new Date());$('formTitle').textContent='Registo de contacto';$('saveContact').textContent='Guardar contacto';renderProfileHint();}
 function renderProfileHint(){const p=active();$('activeProfile').textContent=p?p.station+' · '+p.locator:'Sem perfil';$('profileHint').textContent=editing?'A editar: os dados da estação deste contacto serão mantidos.':p?'Estação: '+p.station+' · '+p.locator:'Cria e seleciona um perfil antes de guardar contactos.';$('kindBadge').textContent=kind(p)==='SWL'?(/^CT[0Ø]/i.test(p.station)?'CTØ':'SWL'):'QSO';}
 function navigate(id){document.querySelectorAll('.page').forEach(el=>el.hidden=el.id!==id);document.querySelectorAll('nav button').forEach(b=>{if(b.dataset.page===id)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});window.scrollTo(0,0);if(id==='map')requestAnimationFrame(()=>showMap(state,active()));if(['dx','propagation'].includes(id))enterOnline(id);}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>navigate(b.dataset.page));
@@ -25,10 +40,11 @@ function render(){renderProfileHint();renderHistory();renderProfiles();renderExp
 function renderHistory(){const q=$('search').value.trim().toLowerCase();const list=state.contacts.filter(c=>[c.call,c.name,c.qth,c.country].some(v=>(v||'').toLowerCase().includes(q))).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));$('contactCount').textContent=state.contacts.length+(state.contacts.length===1?' contacto':' contactos');$('contactList').innerHTML=list.map(c=>`<article class="card"><div><strong>${esc(c.call)}</strong><p>${esc(c.date.split('-').reverse().join('-'))} · ${esc(c.time)} UTC · ${esc(c.band)} · ${esc(c.mode)}<br>${esc(c.name||c.qth||'')} · Estação: ${esc(c.station||'—')}</p></div><div class="actions"><button data-edit="${c.id}">Editar</button><button data-delete="${c.id}">Apagar</button></div></article>`).join('')||'<p class="muted">Ainda não há contactos para apresentar.</p>';}
 $('search').oninput=renderHistory;
 form.elements.call.oninput=e=>e.target.value=e.target.value.toUpperCase();
-form.elements.freq.onchange=()=>{const f=form.elements.freq.value.trim().replace(',','.');form.elements.freq.value=f;const band=bandFor(f);if(band)form.elements.band.value=band;};
-form.onsubmit=e=>{e.preventDefault();safe(async()=>{const p=active(),old=state.contacts.find(c=>c.id===editing);if(!old&&!p){navigate('profiles');throw Error('Cria primeiro o perfil da tua estação.');}const c=Object.fromEntries(new FormData(form));c.call=c.call.trim().toUpperCase();c.locator=c.locator.trim().toUpperCase();if(c.locator&&!locatorPosition(c.locator))throw Error('Locator do contacto inválido.');c.freq=c.freq.trim().replace(',','.');c.band=c.band||bandFor(c.freq);Object.assign(c,{id:old?.id||crypto.randomUUID(),station:old?old.station:p.station,station_locator:old?old.station_locator:p.locator,kind:old?old.kind:kind(p),profileId:old?old.profileId:p.id});if(old?.time?.length===8&&c.time===old.time.slice(0,5))c.time=old.time;validate(c);await mutate(s=>{if(old){const i=s.contacts.findIndex(x=>x.id===c.id);if(i<0)throw Error('Este contacto foi removido noutra janela.');s.contacts[i]=c;}else s.contacts.push(c);});reset();notice('Contacto guardado neste dispositivo.');form.elements.call.focus();});};
+form.elements.freq.oninput=()=>{form.elements.band.value=bandFor(form.elements.freq.value.trim().replace(',','.'));};
+form.elements.freq.onchange=()=>{form.elements.freq.value=form.elements.freq.value.trim().replace(',','.');form.elements.freq.oninput();};
+form.onsubmit=e=>{e.preventDefault();safe(async()=>{const p=active(),old=state.contacts.find(c=>c.id===editing);if(!old&&!p){navigate('profiles');throw Error('Cria primeiro o perfil da tua estação.');}const c=Object.fromEntries(new FormData(form));c.call=c.call.trim().toUpperCase();c.locator=old?.locator||'';const instant=contactInstant();if(!instant)throw Error('Data ou hora local inválida.');const utc=instant.toISOString();c.date=utc.slice(0,10);c.time=utc.slice(11,19);c.freq=c.freq.trim().replace(',','.');c.band=c.freq?bandFor(c.freq):c.band;Object.assign(c,{id:old?.id||crypto.randomUUID(),station:old?old.station:p.station,station_locator:old?old.station_locator:p.locator,kind:old?old.kind:kind(p),profileId:old?old.profileId:p.id});validate(c);await mutate(s=>{if(old){const i=s.contacts.findIndex(x=>x.id===c.id);if(i<0)throw Error('Este contacto foi removido noutra janela.');s.contacts[i]=c;}else s.contacts.push(c);});reset();notice('Contacto guardado neste dispositivo.');form.elements.call.focus();});};
 $('clearContact').onclick=()=>{reset();form.elements.call.focus();};
-$('contactList').onclick=e=>safe(async()=>{const edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');if(edit){const c=state.contacts.find(c=>c.id===edit.dataset.edit);form.reset();editing=c.id;for(const k of ['band','mode'])if(![...form.elements[k].options].some(o=>o.value===c[k]))form.elements[k].add(new Option(c[k],c[k]));for(const [k,v]of Object.entries(c))if(form.elements[k])form.elements[k].value=k==='time'?v.slice(0,5):v;form.dataset.seconds=c.time;$('formTitle').textContent='Editar contacto';$('saveContact').textContent='Guardar alterações';renderProfileHint();navigate('log');}if(del&&confirm('Apagar este contacto? Esta ação não pode ser anulada.'))await mutate(s=>{s.contacts=s.contacts.filter(c=>c.id!==del.dataset.delete);});});
+$('contactList').onclick=e=>safe(async()=>{const edit=e.target.closest('[data-edit]'),del=e.target.closest('[data-delete]');if(edit){const c=state.contacts.find(c=>c.id===edit.dataset.edit);form.reset();editing=c.id;for(const k of ['mode'])if(![...form.elements[k].options].some(o=>o.value===c[k]))form.elements[k].add(new Option(c[k],c[k]));for(const [k,v]of Object.entries(c))if(form.elements[k])form.elements[k].value=k==='time'?v.slice(0,5):v;manualTime=true;setLocalTime(new Date(c.date+'T'+c.time+'Z'));if(c.freq)form.elements.band.value=bandFor(c.freq);$('formTitle').textContent='Editar contacto';$('saveContact').textContent='Guardar alterações';renderProfileHint();navigate('log');}if(del&&confirm('Apagar este contacto? Esta ação não pode ser anulada.'))await mutate(s=>{s.contacts=s.contacts.filter(c=>c.id!==del.dataset.delete);});});
 function renderProfiles(){$('profileList').innerHTML=state.profiles.map(p=>`<article class="card"><label class="profile-choice"><input type="radio" name="activeStation" value="${p.id}" ${p.id===state.active?'checked':''}><span><strong>${esc(p.station)}</strong><br>${esc(p.locator)}</span></label><div class="actions"><button data-profile-edit="${p.id}">Editar</button><button data-profile-delete="${p.id}">Apagar</button></div></article>`).join('')||'<p class="muted">Adiciona o teu primeiro perfil.</p>';}
 $('profileList').onchange=e=>safe(()=>mutate(s=>{if(s.profiles.some(p=>p.id===e.target.value))s.active=e.target.value;}));
 function clearProfile(){editingProfile=null;profileForm.reset();$('profileFormTitle').textContent='Novo perfil';}
